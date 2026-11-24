@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Administration · Idéal Rencontre</title>
+<style>
+:root{--ink:#151a3d;--indigo:#232a66;--bg:#f4f5fb;--gold:#f0a81c;--line:#dfe2f1;--mute:#5f6489;--red:#b3342f}
+*{box-sizing:border-box;margin:0}
+body{font:16px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:var(--indigo);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center}
+header b{color:var(--gold)}
+main{max-width:1000px;margin:0 auto;padding:20px}
+.tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+button{font:600 15px system-ui,sans-serif;border-radius:12px;padding:10px 16px;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink)}
+button.btn,button.on{background:var(--indigo);color:#fff;border-color:var(--indigo)}
+button.red{background:var(--red);color:#fff;border-color:var(--red)}
+:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px;display:grid;gap:10px}
+.imgs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.imgs img{width:100%;max-height:340px;object-fit:contain;background:var(--line);border-radius:10px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.mut{color:var(--mute);font-size:14px}
+.box{max-width:380px;margin:12vh auto;padding:20px;display:grid;gap:14px}
+input{font:16px system-ui;padding:12px;border:1px solid var(--line);border-radius:12px;width:100%}
+.err{color:var(--red);font-size:14px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;display:grid}
+.card .kpi{background:var(--bg)}.kpi b{font-size:22px}.kpi span{color:var(--mute);font-size:13px}
+table{border-collapse:collapse;width:100%;font-size:14px}th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left}
+.scroll{overflow-x:auto}h3{margin:6px 0}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0"></script>
+<script>
+// ====== À REMPLIR (mêmes valeurs que index.html) ======
+const SB_URL='https://rihzcllrsnuuatnzlbfb.supabase.co';
+const SB_KEY='sb_publishable_yaywkECP2XdFJgRj2PB7Hg_H3X0dJDO';
+// =======================================================
+const sb=supabase.createClient(SB_URL,SB_KEY),$=s=>document.querySelector(s),app=$('#app');
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function login(){
+  app.innerHTML=`<section class="box"><h1>Administration</h1><div id="f" style="display:grid;gap:12px"><input id="ph" type="tel" placeholder="+225 05 00 00 00 00" aria-label="Numéro de téléphone"><button class="btn" id="go">Recevoir le code</button></div><p class="err" id="e"></p></section>`;
+  $('#go').onclick=async()=>{
+    const p=$('#ph').value.replace(/[\s.-]/g,'');
+    const {error}=await sb.auth.signInWithOtp({phone:p});
+    if(error)return $('#e').textContent='Envoi impossible.';
+    $('#f').innerHTML=`<input id="cd" inputmode="numeric" maxlength="6" placeholder="Code reçu" aria-label="Code reçu"><button class="btn" id="ok">Entrer</button>`;
+    $('#ok').onclick=async()=>{
+      const {error}=await sb.auth.verifyOtp({phone:p,token:$('#cd').value.trim(),type:'sms'});
+      if(error)return $('#e').textContent='Code incorrect.';
+      start();
+    };
+  };
+}
+
+async function start(){
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session)return login();
+  const {data:p}=await sb.from('profiles').select('est_admin').eq('id',session.user.id).maybeSingle();
+  if(!p?.est_admin){
+    app.innerHTML=`<section class="box"><h1>Accès réservé</h1><p class="mut">Ce compte n’est pas administrateur.</p><button id="lo">Se déconnecter</button></section>`;
+    return $('#lo').onclick=async()=>{await sb.auth.signOut();login()};
+  }
+  const T=[['Tableau de bord',dash],['Paiements',paiements],['Utilisateurs',users],['Vérifications',verifs],['Signalements',reports]];
+  app.innerHTML=`<header><span><b>Idéal</b> Rencontre · Direction</span><button id="lo">Déconnexion</button></header><main><div class="tabs">${T.map((t,i)=>`<button data-i="${i}">${t[0]}</button>`).join('')}</div><div id="v"></div></main>`;
+  $('#lo').onclick=async()=>{await sb.auth.signOut();login()};
+  const tab=i=>{document.querySelectorAll('.tabs button').forEach((b,k)=>b.classList.toggle('on',k===i));T[i][1]()};
+  document.querySelectorAll('.tabs button').forEach((b,i)=>b.onclick=()=>tab(i));tab(0);
+}
+
+async function verifs(){
+  const v=$('#v');v.innerHTML='<p class="mut">Chargement…</p>';
+  const {data}=await sb.from('verifications').select('id,selfie_url,piece_url,profiles(prenom,date_naissance,ville,pays)').eq('statut','en_attente').order('created_at');
+  if(!data?.length)return v.innerHTML='<p class="mut">Aucune vérification en attente.</p>';
+  const sign=async p=>(await sb.storage.from('verifications').createSignedUrl(p,300)).data?.signedUrl||'';
+  const rows=await Promise.all(data.map(async x=>({...x,a:await sign(x.selfie_url),b:await sign(x.piece_url)})));
+  v.innerHTML=rows.map(x=>`<article class="card"><h3>${esc(x.profiles?.prenom)} · né(e) le ${esc(x.profiles?.date_naissance)}</h3><p class="mut">${esc(x.profiles?.ville)}, ${esc(x.profiles?.pays)}. Compare le visage du selfie à celui de la pièce, vérifie la date de naissance et que la personne a 18 ans ou plus.</p><div class="imgs"><img src="${x.a}" alt="Selfie"><img src="${x.b}" alt="Pièce d’identité"></div><div class="row"><button class="btn" data-v="${x.id}" data-ok="1">Valider</button><button data-v="${x.id}" data-ok="0">Refuser</button></div></article>`).join('');
+  v.querySelectorAll('[data-v]').forEach(b=>b.onclick=async()=>{
+    const x=rows.find(r=>r.id===b.dataset.v);
+    const {error}=await sb.rpc('admin_verification',{p_id:x.id,p_ok:b.dataset.ok==='1'});
+    if(error)return alert(error.message);
+    await sb.storage.from('verifications').remove([x.selfie_url,x.piece_url]); // suppression des photos après décision
+    verifs();
+  });
+}
+
+async function reports(){
+  const v=$('#v');v.innerHTML='<p class="mut">Chargement…</p>';
+  const {data}=await sb.from('signalements').select('id,cible,motif,details,created_at,cible_p:profiles!signalements_cible_fkey(prenom,statut),auteur_p:profiles!signalements_auteur_fkey(prenom)').eq('statut','ouvert').order('created_at');
+  if(!data?.length)return v.innerHTML='<p class="mut">Aucun signalement ouvert.</p>';
+  v.innerHTML=data.map(x=>`<article class="card"><h3>${esc(x.cible_p?.prenom)} <span class="mut">(${esc(x.cible_p?.statut)})</span></h3><p>${esc(x.motif)}${x.details?' · '+esc(x.details):''}</p><p class="mut">Signalé par ${esc(x.auteur_p?.prenom)} le ${new Date(x.created_at).toLocaleDateString('fr-FR')}</p><div class="row"><button data-r="${x.id}" data-a="classer">Classer sans suite</button><button data-r="${x.id}" data-a="suspendu">Suspendre</button><button class="red" data-r="${x.id}" data-a="banni">Bannir</button></div></article>`).join('');
+  v.querySelectorAll('[data-r]').forEach(b=>b.onclick=async()=>{
+    const x=data.find(r=>r.id===b.dataset.r),a=b.dataset.a;
+    if(a!=='classer'){
+      if(!confirm(a==='banni'?'Bannir définitivement ce compte ?':'Suspendre ce compte ?'))return;
+      const {error}=await sb.rpc('admin_statut',{p_user:x.cible,p_statut:a});
+      if(error)return alert(error.message);
+    }
+    await sb.rpc('admin_signalement',{p_id:x.id});
+    reports();
+  });
+}
+const fm=(d,n)=>d==='EUR'?(n/100).toLocaleString('fr-FR',{style:'currency',currency:'EUR'}):Number(n).toLocaleString('fr-FR')+' '+(d==='XOF'||d==='XAF'?'FCFA':d);
+const lib={paye:'Payé',en_attente:'En attente',echoue:'Échoué'};
+
+async function dash(){
+  const v=$('#v');v.innerHTML='<p class="mut">Chargement…</p>';
+  const {data:s,error}=await sb.rpc('admin_stats');
+  if(error)return v.innerHTML='<p class="err">'+esc(error.message)+'</p>';
+  const k=(l,n)=>`<div class="kpi"><b>${n}</b><span>${l}</span></div>`;
+  v.innerHTML=`<div class="kpis">${k('Utilisateurs',s.utilisateurs)}${k('Abonnés actifs',s.abonnes_actifs)}${k('Profils vérifiés',s.verifies)}${k('Vérifications à traiter',s.en_attente_verif)}${k('Signalements ouverts',s.signalements_ouverts)}</div>
+  <h3>Revenus encaissés</h3>${s.revenus.length?s.revenus.map(r=>`<article class="card"><h3>${esc(r.devise)}</h3><div class="kpis">${k('Aujourd’hui',fm(r.devise,r.jour))}${k('7 jours',fm(r.devise,r.semaine))}${k('30 jours',fm(r.devise,r.mois))}${k('Total ('+r.nb+' paiements)',fm(r.devise,r.total))}</div></article>`).join(''):'<p class="mut">Aucun paiement pour le moment.</p>'}
+  <h3>Utilisateurs par pays</h3><div class="card">${s.par_pays.map(p=>`<div class="row"><span style="flex:1">${esc(p.pays)}</span><b>${p.n}</b></div>`).join('')||'<p class="mut">Aucun inscrit.</p>'}</div>`;
+}
+
+async function paiements(){
+  const v=$('#v');v.innerHTML='<p class="mut">Chargement…</p>';
+  const {data}=await sb.from('abonnements').select('reference,plan,montant,devise,statut,created_at,profiles(prenom,pays)').order('created_at',{ascending:false}).limit(100);
+  if(!data?.length)return v.innerHTML='<p class="mut">Aucun paiement.</p>';
+  v.innerHTML=`<p class="mut">Les 100 derniers. « Payé » = confirmé automatiquement par Flutterwave. Les montants sont comptés à la date de la demande.</p><div class="scroll"><table><tr><th>Date</th><th>Client</th><th>Formule</th><th>Montant</th><th>Statut</th><th>Référence</th><th></th></tr>${data.map(x=>`<tr><td>${new Date(x.created_at).toLocaleString('fr-FR')}</td><td>${esc(x.profiles?.prenom)} (${esc(x.profiles?.pays)})</td><td>${esc(x.plan.replace('_',' '))}</td><td>${fm(x.devise,x.montant)}</td><td>${lib[x.statut]||esc(x.statut)}</td><td>${esc(x.reference||'')}</td><td>${x.statut==='en_attente'&&x.reference?`<button data-ref="${esc(x.reference)}">Valider</button>`:''}</td></tr>`).join('')}</table></div>`;
+  v.querySelectorAll('[data-ref]').forEach(b=>b.onclick=async()=>{
+    if(!confirm('Valide seulement si tu as vu ce paiement dans ton tableau de bord Flutterwave. Continuer ?'))return;
+    const {data:r,error}=await sb.rpc('admin_valider_paiement',{p_ref:b.dataset.ref});
+    alert(error?error.message:r);paiements();
+  });
+}
+
+async function users(){
+  const v=$('#v');v.innerHTML='<input id="q" placeholder="Rechercher un prénom" aria-label="Rechercher"><div id="ul" style="margin-top:14px"></div>';
+  const load=async()=>{
+    const q=$('#q').value.trim();
+    let r=sb.from('profiles').select('id,prenom,pays,ville,statut,verifie,abonne_jusqua,est_admin').order('created_at',{ascending:false}).limit(50);
+    if(q)r=r.ilike('prenom','%'+q+'%');
+    const {data}=await r;
+    $('#ul').innerHTML=(data||[]).map(x=>`<article class="card"><h3>${esc(x.prenom)}${x.verifie?' · vérifié':''}${x.est_admin?' · admin':''}</h3><p class="mut">${esc(x.ville)}, ${esc(x.pays)} · ${esc(x.statut)} · ${x.abonne_jusqua&&new Date(x.abonne_jusqua)>new Date()?'abonné jusqu’au '+new Date(x.abonne_jusqua).toLocaleDateString('fr-FR'):'non abonné'}</p>${x.est_admin?'':`<div class="row">${['actif','suspendu','banni'].filter(s=>s!==x.statut).map(s=>`<button data-u="${x.id}" data-s="${s}">${s==='actif'?'Réactiver':s==='suspendu'?'Suspendre':'Bannir'}</button>`).join('')}</div>`}</article>`).join('')||'<p class="mut">Aucun résultat.</p>';
+    $('#ul').querySelectorAll('[data-u]').forEach(b=>b.onclick=async()=>{
+      if(b.dataset.s!=='actif'&&!confirm('Confirmer ?'))return;
+      const {error}=await sb.rpc('admin_statut',{p_user:b.dataset.u,p_statut:b.dataset.s});
+      if(error)alert(error.message);load();
+    });
+  };
+  $('#q').oninput=()=>{clearTimeout(window.__t);window.__t=setTimeout(load,300)};load();
+}
+start();
+</script>
+</body>
+</html>

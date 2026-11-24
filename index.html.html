@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Idéal Rencontre</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&family=Public+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#151a3d;--indigo:#232a66;--bg:#f4f5fb;--gold:#f0a81c;--line:#dfe2f1;--mute:#5f6489;--red:#b3342f;--r:18px}
+*{box-sizing:border-box;margin:0}
+body{font:16px/1.5 'Public Sans',system-ui,sans-serif;background:var(--bg);color:var(--ink);min-height:100dvh}
+#app{max-width:480px;margin:0 auto;min-height:100dvh;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
+h1,h2,h3,header{font-family:'Bricolage Grotesque',system-ui,sans-serif}
+header{padding:14px 18px;background:var(--indigo);color:#fff;font-size:20px;font-weight:500}
+header b{font-weight:700;color:var(--gold)}
+main{flex:1;padding-bottom:70px}
+nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;display:flex;background:#fff;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;padding:14px 4px;border:0;background:none;font:600 14px 'Public Sans',sans-serif;color:var(--mute);cursor:pointer}
+nav button.on{color:var(--indigo);box-shadow:inset 0 3px 0 var(--gold)}
+.btn{background:var(--indigo);color:#fff;border:0;border-radius:14px;padding:13px 20px;font:600 16px 'Public Sans',sans-serif;cursor:pointer}
+.ghost{background:none;border:1px solid var(--line);border-radius:12px;padding:8px 12px;font:600 14px 'Public Sans',sans-serif;color:var(--ink);cursor:pointer}
+:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.auth{padding:14vh 24px 24px;display:grid;gap:16px}
+.auth h1{font-size:42px;line-height:1.05;color:var(--indigo)}
+.auth h1 span{display:block;font-weight:500}
+label{display:grid;gap:6px;font-weight:600;font-size:14px}
+input,select,textarea{font:16px 'Public Sans',sans-serif;padding:12px;border:1px solid var(--line);border-radius:12px;background:#fff;width:100%;color:var(--ink)}
+.pad{padding:20px;display:grid;gap:14px}
+.mut{color:var(--mute);font-size:14px}.err{color:var(--red);font-size:14px}.c{text-align:center;padding:40px}
+.card{margin:16px;background:#fff;border-radius:var(--r);overflow:hidden;border:1px solid var(--line)}
+.card img{width:100%;aspect-ratio:4/5;object-fit:cover;background:var(--line);display:block}
+.info{padding:14px 16px}
+.ok{font-style:normal;font-size:12px;background:var(--gold);color:var(--ink);padding:2px 8px;border-radius:99px;vertical-align:middle}
+.act{display:flex;gap:12px;padding:0 16px}.act button{flex:1}
+.empty{padding:60px 28px;text-align:center}
+.list{list-style:none;padding:8px 16px}
+.list li{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.list img,.av{width:52px;height:52px;border-radius:50%;object-fit:cover;background:var(--line)}
+.av{width:120px;height:120px}
+.plan{display:flex;justify-content:space-between;align-items:center;background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.chat{display:flex;flex-direction:column;height:calc(100dvh - 132px)}
+.top{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line);gap:6px}
+.top span{display:flex;gap:6px}
+.ms{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:8px}
+.b{max-width:80%;padding:9px 13px;border-radius:16px;background:#fff;border:1px solid var(--line);align-self:flex-start;overflow-wrap:anywhere}
+.b.me{align-self:flex-end;background:var(--indigo);color:#fff;border-color:var(--indigo)}
+.b.wait{opacity:.6}.b small{display:block;font-size:11px}
+#fm{display:flex;gap:8px;padding:10px 12px}
+.wall{margin:8px 12px;background:#fff7e0;border:1px solid var(--gold);border-radius:var(--r);padding:14px;display:grid;gap:8px}
+.toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 18px;border-radius:14px;z-index:9;max-width:90%}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0"></script>
+<script>
+// ====== À REMPLIR ======
+const SB_URL='https://rihzcllrsnuuatnzlbfb.supabase.co';
+const SB_KEY='sb_publishable_yaywkECP2XdFJgRj2PB7Hg_H3X0dJDO';
+// =======================
+const sb=supabase.createClient(SB_URL,SB_KEY);
+const $=s=>document.querySelector(s),app=$('#app'),skip=new Set();
+let me=null,prof=null,sub=null;
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const age=d=>Math.floor((Date.now()-new Date(d))/31557600000);
+const money=x=>x.devise==='EUR'?(x.montant/100).toLocaleString('fr-FR',{style:'currency',currency:'EUR'}):x.montant.toLocaleString('fr-FR')+' FCFA';
+function toast(t){const d=document.createElement('div');d.className='toast';d.textContent=t;document.body.append(d);setTimeout(()=>d.remove(),3200)}
+const shrink=f=>new Promise(r=>{const i=new Image();i.onload=()=>{const k=Math.min(1,900/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=i.width*k;c.height=i.height*k;c.getContext('2d').drawImage(i,0,0,c.width,c.height);c.toBlob(r,'image/jpeg',.8)};i.src=URL.createObjectURL(f)});
+
+/* ---------- Connexion par SMS ---------- */
+function login(){
+  app.innerHTML=`<section class="auth"><h1>Idéal<span>Rencontre</span></h1><p>Des rencontres sérieuses, de l’Afrique à l’Europe.</p><div id="f" style="display:grid;gap:14px"><label>Numéro de téléphone<input id="ph" type="tel" placeholder="+225 07 00 00 00 00" autocomplete="tel"></label><button class="btn" id="go">Recevoir le code</button></div><p class="err" id="e"></p></section>`;
+  $('#go').onclick=async()=>{
+    const p=$('#ph').value.replace(/[\s.-]/g,'');
+    const {error}=await sb.auth.signInWithOtp({phone:p});
+    if(error)return $('#e').textContent='Envoi impossible. Vérifie ton numéro avec l’indicatif du pays (+225, +221, +33…).';
+    $('#f').innerHTML=`<label>Code reçu par SMS<input id="cd" inputmode="numeric" maxlength="6" autocomplete="one-time-code"></label><button class="btn" id="ok">Se connecter</button>`;
+    $('#ok').onclick=async()=>{
+      const {error}=await sb.auth.verifyOtp({phone:p,token:$('#cd').value.trim(),type:'sms'});
+      if(error)return $('#e').textContent='Code incorrect ou expiré.';
+      start();
+    };
+  };
+}
+
+/* ---------- Création du profil ---------- */
+async function profileForm(){
+  const {data:pays}=await sb.from('pays').select('nom').order('nom');
+  app.innerHTML=`<section class="pad"><h2>Crée ton profil</h2>
+  <label>Prénom<input id="pn" maxlength="40"></label>
+  <label>Date de naissance<input id="dn" type="date"></label>
+  <label>Je suis<select id="gn"><option value="femme">Une femme</option><option value="homme">Un homme</option></select></label>
+  <label>Pays<select id="py">${(pays||[]).map(p=>`<option>${esc(p.nom)}</option>`).join('')}</select></label>
+  <label>Ville<input id="vl" maxlength="60"></label>
+  <label>Je cherche<select id="ob"><option value="serieux">Une relation sérieuse</option><option value="rencontre">Des rencontres, de l’amitié</option></select></label>
+  <label>Religion (facultatif)<input id="rg" maxlength="40"></label>
+  <label>Présentation<textarea id="bi" rows="3" maxlength="300"></textarea></label>
+  <label>Ta photo<input id="pt" type="file" accept="image/*"></label>
+  <p class="mut">Réservé aux personnes de 18 ans et plus.</p>
+  <button class="btn" id="sv">Créer mon profil</button><p class="err" id="e"></p></section>`;
+  $('#sv').onclick=async()=>{
+    const f=$('#pt').files[0];
+    if(!f||!$('#pn').value.trim()||!$('#dn').value||!$('#vl').value.trim())return $('#e').textContent='Remplis tous les champs obligatoires et ajoute une photo.';
+    const {error}=await sb.from('profiles').insert({id:me.id,prenom:$('#pn').value.trim(),date_naissance:$('#dn').value,genre:$('#gn').value,pays:$('#py').value,ville:$('#vl').value.trim(),objectif:$('#ob').value,religion:$('#rg').value.trim()||null,bio:$('#bi').value.trim()||null});
+    if(error)return $('#e').textContent=error.message.includes('18')?'Réservé aux personnes de 18 ans et plus.':'Profil non créé : '+error.message;
+    const b=await shrink(f),p=`${me.id}/${Date.now()}.jpg`;
+    await sb.storage.from('photos').upload(p,b,{contentType:'image/jpeg'});
+    await sb.from('photos').insert({user_id:me.id,url:sb.storage.from('photos').getPublicUrl(p).data.publicUrl});
+    start();
+  };
+}
+
+/* ---------- Structure et navigation ---------- */
+function shell(){
+  app.innerHTML=`<header><b>Idéal</b> Rencontre</header><main id="v"></main><nav>${[['discover','Découvrir'],['matches','Matchs'],['premium','Abonnement'],['me','Profil']].map(([k,l])=>`<button data-t="${k}">${l}</button>`).join('')}</nav>`;
+  document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>go(b.dataset.t));
+  go('discover');
+}
+function go(t){
+  if(sub){sb.removeChannel(sub);sub=null}
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  ({discover,matches,premium,me:profil})[t]();
+}
+
+/* ---------- Découvrir ---------- */
+async function discover(){
+  const v=$('#v');v.innerHTML='<p class="mut c">Recherche de profils…</p>';
+  const [{data:lk},{data:bl},{data}]=await Promise.all([
+    sb.from('likes').select('vers_user').eq('de_user',me.id),
+    sb.from('blocages').select('vers_user').eq('de_user',me.id),
+    sb.from('profiles').select('id,prenom,date_naissance,ville,pays,bio,verifie,photos(url)').eq('objectif',prof.objectif).limit(60)]);
+  const seen=new Set([me.id,...skip,...(lk||[]).map(x=>x.vers_user),...(bl||[]).map(x=>x.vers_user)]);
+  const list=(data||[]).filter(p=>!seen.has(p.id));let i=0;
+  const show=()=>{
+    const p=list[i];
+    if(!p)return v.innerHTML='<div class="empty"><h3>Plus de profils pour le moment</h3><p class="mut">Reviens bientôt : de nouvelles personnes s’inscrivent chaque jour.</p></div>';
+    v.innerHTML=`<article class="card"><img src="${esc(p.photos?.[0]?.url||'')}" alt="Photo de ${esc(p.prenom)}"><div class="info"><h3>${esc(p.prenom)}, ${age(p.date_naissance)} ${p.verifie?'<i class="ok">vérifié</i>':''}</h3><p class="mut">${esc(p.ville)}, ${esc(p.pays)}</p><p>${esc(p.bio||'')}</p></div></article><div class="act"><button class="ghost" id="no">Passer</button><button class="btn" id="yes">J’aime</button></div>`;
+    $('#no').onclick=()=>{skip.add(p.id);i++;show()};
+    $('#yes').onclick=async()=>{
+      await sb.from('likes').insert({de_user:me.id,vers_user:p.id});i++;
+      const {data:m}=await sb.from('matches').select('id').in('user_a',[me.id,p.id]).in('user_b',[me.id,p.id]).limit(1);
+      if(m?.length)toast(`C’est un match avec ${p.prenom} !`);
+      show();
+    };
+  };
+  show();
+}
+
+/* ---------- Matchs ---------- */
+async function matches(){
+  const v=$('#v');
+  const {data:m}=await sb.from('matches').select('id,user_a,user_b').order('created_at',{ascending:false});
+  if(!m?.length)return v.innerHTML='<div class="empty"><h3>Pas encore de match</h3><p class="mut">Aime des profils : quand c’est réciproque, la discussion s’ouvre ici.</p></div>';
+  const ids=m.map(x=>x.user_a===me.id?x.user_b:x.user_a);
+  const {data:ps}=await sb.from('profiles').select('id,prenom,photos(url)').in('id',ids);
+  v.innerHTML=`<ul class="list">${m.map((x,k)=>{const o=(ps||[]).find(p=>p.id===ids[k])||{};return`<li tabindex="0" data-m="${x.id}" data-o="${ids[k]}" data-n="${esc(o.prenom)}"><img src="${esc(o.photos?.[0]?.url||'')}" alt=""><b>${esc(o.prenom||'Profil')}</b></li>`}).join('')}</ul>`;
+  v.querySelectorAll('li').forEach(li=>li.onclick=()=>openChat(li.dataset.m,li.dataset.o,li.dataset.n));
+}
+
+/* ---------- Messagerie ---------- */
+async function openChat(mid,oid,name){
+  const v=$('#v');
+  v.innerHTML=`<div class="chat"><div class="top"><button class="ghost" id="bk">Retour</button><b>${esc(name)}</b><span><button class="ghost" id="rp">Signaler</button><button class="ghost" id="bq">Bloquer</button></span></div><div id="ms" class="ms"></div><div id="bn"></div><form id="fm"><input id="tx" maxlength="2000" placeholder="Ton message" autocomplete="off" aria-label="Ton message"><button class="btn">Envoyer</button></form></div>`;
+  const load=async()=>{
+    const {data}=await sb.from('messages').select('*').eq('match_id',mid).order('created_at');
+    $('#ms').innerHTML=(data||[]).map(m=>`<p class="b${m.sender_id===me.id?' me':''}${m.statut==='en_attente'?' wait':''}">${esc(m.contenu)}${m.statut==='en_attente'?'<small>en attente</small>':''}</p>`).join('');
+    $('#ms').scrollTop=1e9;
+    const {data:bk}=await sb.from('conversation_blocages').select('raison').eq('match_id',mid).eq('user_id',me.id).limit(1);
+    $('#bn').innerHTML=bk?.length?`<div class="wall"><b>${bk[0].raison==='contact'?'Les coordonnées sont réservées aux abonnés.':'Tu as atteint les 50 messages gratuits.'}</b><p>Abonne-toi pour continuer : tes messages en attente partiront aussitôt.</p><button class="btn" id="ab" type="button">Voir les abonnements</button></div>`:'';
+    if(bk?.length)$('#ab').onclick=()=>go('premium');
+  };
+  await load();
+  sub=sb.channel('m'+mid).on('postgres_changes',{event:'*',schema:'public',table:'messages',filter:'match_id=eq.'+mid},load).subscribe();
+  $('#fm').onsubmit=async e=>{
+    e.preventDefault();const t=$('#tx').value.trim();if(!t)return;$('#tx').value='';
+    const {error}=await sb.from('messages').insert({match_id:mid,sender_id:me.id,contenu:t});
+    if(error)toast('Message non envoyé : '+error.message);
+    load();
+  };
+  $('#bk').onclick=()=>go('matches');
+  $('#rp').onclick=async()=>{const m=prompt('Pourquoi signales-tu cette personne ?');if(m){await sb.from('signalements').insert({auteur:me.id,cible:oid,motif:m});toast('Signalement envoyé.')}};
+  $('#bq').onclick=async()=>{if(confirm('Bloquer cette personne ?')){await sb.from('blocages').insert({de_user:me.id,vers_user:oid});go('matches')}};
+}
+
+/* ---------- Abonnement ---------- */
+async function premium(){
+  const v=$('#v');
+  prof=(await sb.from('profiles').select('*').eq('id',me.id).single()).data;
+  const on=prof.abonne_jusqua&&new Date(prof.abonne_jusqua)>new Date();
+  const pl=[['7_jours','7 jours'],['14_jours','14 jours'],['30_jours','30 jours']];
+  const pr=await Promise.all(pl.map(([k])=>sb.rpc('prix_abonnement',{uid:me.id,p_plan:k})));
+  v.innerHTML=`<section class="pad"><h2>Abonnement</h2><p class="mut">${on?'Actif jusqu’au '+new Date(prof.abonne_jusqua).toLocaleDateString('fr-FR')+'.':'Discute sans limite et partage tes coordonnées. Gratuit jusqu’à 50 messages par conversation.'}</p>${pl.map(([k,l],j)=>{const x=pr[j].data?.[0];return x?`<div class="plan"><div><b>${l}</b><p class="mut">${money(x)}</p></div><button class="btn" data-p="${k}">Choisir</button></div>`:''}).join('')}</section>`;
+  v.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>pay(b.dataset.p));
+}
+async function pay(plan){
+  const {data:{session}}=await sb.auth.getSession();
+  toast('Ouverture du paiement sécurisé…');
+  try{
+    const r=await fetch('/api/pay',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},body:JSON.stringify({plan})});
+    const j=await r.json();
+    j.url?location.href=j.url:toast(j.error||'Paiement indisponible pour le moment.');
+  }catch(e){toast('Paiement indisponible pour le moment.')}
+}
+
+/* ---------- Profil ---------- */
+async function profil(){
+  const v=$('#v');
+  const [{data:ph},{data:vf}]=await Promise.all([
+    sb.from('photos').select('url').eq('user_id',me.id).limit(1),
+    sb.from('verifications').select('statut').eq('user_id',me.id).order('created_at',{ascending:false}).limit(1)]);
+  const st=prof.verifie?'ok':vf?.[0]?.statut;
+  const box=st==='ok'?'<p class="mut">Profil vérifié ✔</p>':st==='en_attente'?'<p class="mut">Vérification en cours d’examen.</p>':`<h3>Vérifier mon profil</h3><label>Selfie<input id="sf" type="file" accept="image/*" capture="user"></label><label>Pièce d’identité<input id="pi" type="file" accept="image/*"></label><button class="btn" id="vb">Envoyer pour vérification</button><p class="mut">Ces photos servent uniquement à la vérification et sont supprimées après examen.</p>`;
+  v.innerHTML=`<section class="pad"><img class="av" src="${esc(ph?.[0]?.url||'')}" alt="Ta photo"><h2>${esc(prof.prenom)}, ${age(prof.date_naissance)}</h2><p class="mut">${esc(prof.ville)}, ${esc(prof.pays)}</p><p>${esc(prof.bio||'')}</p>${box}<button class="ghost" id="lo">Se déconnecter</button></section>`;
+  $('#lo').onclick=async()=>{await sb.auth.signOut();login()};
+  if($('#vb'))$('#vb').onclick=async()=>{
+    const a=$('#sf').files[0],b=$('#pi').files[0];
+    if(!a||!b)return toast('Ajoute le selfie et la pièce d’identité.');
+    const t=Date.now(),ps=[`${me.id}/selfie-${t}.jpg`,`${me.id}/piece-${t}.jpg`];
+    const r=await Promise.all([a,b].map(async(f,k)=>sb.storage.from('verifications').upload(ps[k],await shrink(f),{contentType:'image/jpeg'})));
+    if(r.some(x=>x.error))return toast('Envoi impossible, réessaie.');
+    const {error}=await sb.from('verifications').insert({user_id:me.id,selfie_url:ps[0],piece_url:ps[1]});
+    if(error)return toast('Envoi impossible, réessaie.');
+    toast('Envoyé ! Nous examinons ta demande.');profil();
+  };
+}
+
+/* ---------- Démarrage ---------- */
+async function start(){
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session)return login();
+  me=session.user;
+  const {data}=await sb.from('profiles').select('*').eq('id',me.id).maybeSingle();
+  prof=data;prof?shell():profileForm();
+  if(location.search.includes('paiement=')){history.replaceState({},'','/');toast('Merci ! Ton abonnement s’active dès que le paiement est confirmé.')}
+}
+start();
+</script>
+</body>
+</html>
